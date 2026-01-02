@@ -1,13 +1,12 @@
 import os
 
 from pathlib import Path
+import re
 from urllib import response
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
-
-# from apps.MOP_Agent import BASE_DIR, PDF_PATH
 
 
 def get_api_key() -> str:
@@ -30,21 +29,21 @@ def read_pdf_content() -> str:
     Returns the extracted text as a string.
     """
     BASE_DIR = Path(__file__).parent
-    # print(f"BASE_DIR: {BASE_DIR}")
     PDF_PATH = BASE_DIR / "Ciena_Technical_Publication.pdf"
 
-    file = PyPDFLoader(str(PDF_PATH))
+    try:
+        loader = PyPDFLoader(str(PDF_PATH))
+        documents = loader.load()
 
-    if file is not None:
-        pdf_reader = file.load()
+        text = ""
+        for doc in documents:
+            text += doc.page_content
 
-        information = ""
-        for page in pdf_reader:
-            information += page.page_content
-    else:
-        print("Failed to load the PDF file.")
-        return ""
-    return information
+        return text
+
+    except Exception as e:
+        print(f"Failed to load PDF: {e}")
+        return None
 
 
 def get_shelf_type() -> str:
@@ -53,56 +52,66 @@ def get_shelf_type() -> str:
     Keeps prompting until a valid value is entered.
     """
     while True:
-        shelf_type = input("Enter the Shelf Type: ").strip()
+        shelf_type = input("Enter the Shelf Type('e' for exit): ").strip()
 
         if not shelf_type:
             print(" Shelf type cannot be empty. Please enter a valid value.")
-        else:
-            return shelf_type
+        elif shelf_type.lower() == "e":
+            print("Exiting the program.")
+            exit(0)
+
+        match = re.findall(r"\b(R2|R4|R6|R8)\b", shelf_type.upper())
+        # rint(f"Detected Shelf Types: {match} \n")
+        if len(match) == 0:
+            print(
+                "No Valid Shelf Types detected. Please enter only one from (R2, R4, R6, R8)"
+            )
+            continue
+        elif len(match) > 1:
+            print(
+                "Multiple Shelf Types detected. Please enter only one from (R2, R4, R6, R8)"
+            )
+            continue
+
+        return match[0]
 
 
 def create_prompt_template() -> PromptTemplate:
     """
     Creates and returns the PromptTemplate object.
     """
+    VALID_AP_SLOTS = {40}
 
     summary_template = """
-    Referring the Document {information}, generate Method of Procedure (MOP) for replacing the Access Panel (AP).
+    Generate MOP to replace Access panel slot:{VALID_AP_SLOTS} for the given Shelf Type: {shelf_type}. Make the steps precise and to the point. 
+    If information is missing, say: \"Not specified in document\"
     
-    INPUTS: {shelf_type}.
-    
-    SAFETY RULES:
-        - Include all applicable CAUTION and DANGER warnings.
-        - Do NOT omit safety steps even if repetitive.
-
-    COMPLIANCE RULE:
-        - If the document does not explicitly describe a step, do NOT include it.
-        - If unsure, state that the document does not provide guidance for that step.
-       
-    Make the steps precise and to the point.
+    Document to Document:  {pdf_content}    
+   
     """
 
     return PromptTemplate(
-        input_variables=["information", "shelf_type"], template=summary_template
+        input_variables=["pdf_content", "shelf_type", "VALID_AP_SLOTS"],
+        template=summary_template,
     )
 
 
-def generate_mop(information: str, shelf_type: str, llm) -> str:
+def generate_mop(pdf_content: str, shelf_type: str, llm) -> str:
     """
     Invokes the LLM chain and returns the generated response.
     """
     prompt = create_prompt_template()
     chain = prompt | llm
 
-    response = chain.invoke({"information": information, "shelf_type": shelf_type})
+    response = chain.invoke(
+        {"pdf_content": pdf_content, "shelf_type": shelf_type, "VALID_AP_SLOTS": "{40}"}
+    )
 
     return response.content
 
 
 def main():
-    """
-    Application entry point.
-    """
+
     API_KEY = get_api_key()
 
     llm = ChatOpenAI(model="gpt-5-mini", temperature=0, openai_api_key=API_KEY)
