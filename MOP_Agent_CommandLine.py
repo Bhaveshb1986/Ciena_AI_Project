@@ -14,9 +14,11 @@ def get_api_key() -> str:
     Retrieves the OpenAI API key from environment variables.
     Exits the program if the key is not found.
     """
+    
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")
+    #print(f"Retrieved API Key: {api_key}")
     if not api_key:
         print("OPENAI_API_KEY not found. Please check your .env file.")
         exit(1)
@@ -43,7 +45,7 @@ def read_pdf_content() -> str:
 
     except Exception as e:
         print(f"Failed to load PDF: {e}")
-        return None
+        exit(1)
 
 
 def get_shelf_type() -> str:
@@ -52,7 +54,7 @@ def get_shelf_type() -> str:
     Keeps prompting until a valid value is entered.
     """
     while True:
-        shelf_type = input("Enter the Shelf Type('e' for exit): ").strip()
+        shelf_type = input("Enter the Shelf Type - R2/R4/R6/R8 ('e' for exit): ").strip()
 
         if not shelf_type:
             print(" Shelf type cannot be empty. Please enter a valid value.")
@@ -86,7 +88,7 @@ def create_prompt_template() -> PromptTemplate:
     Generate MOP to replace Access panel slot:{VALID_AP_SLOTS} for the given Shelf Type: {shelf_type}. Make the steps precise and to the point. 
     If information is missing, say: \"Not specified in document\"
     
-    Document to Document:  {pdf_content}    
+    Document to Refer:  {pdf_content}    
    
     """
 
@@ -114,15 +116,20 @@ def main():
 
     API_KEY = get_api_key()
 
-    llm = ChatOpenAI(model="gpt-5-mini", temperature=0, openai_api_key=API_KEY)
+    try:
+        llm = ChatOpenAI(model="gpt-5-mini", temperature=0, openai_api_key=API_KEY)
+        llm.invoke("health check")
+    except Exception as e:
+        print(f"Failed to initialize LLM: {e}")
+        exit(1)
+
+    #model="gpt-5-mini"
+
 
     shelf_type = get_shelf_type()
 
     pdf_content = read_pdf_content()
-    if pdf_content == "":
-        print("Exiting due to failure in loading PDF content.")
-        return
-
+    
     mop_output = generate_mop(pdf_content, shelf_type, llm)
     print("\n\n Generated MOP:\n")
     print(mop_output)
