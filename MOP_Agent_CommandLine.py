@@ -63,7 +63,6 @@ def get_shelf_type() -> str:
             exit(0)
 
         match = re.findall(r"\b(R2|R4|R6|R8)\b", shelf_type.upper())
-        # rint(f"Detected Shelf Types: {match} \n")
         if len(match) == 0:
             print(
                 "No Valid Shelf Types detected. Please enter only one from (R2, R4, R6, R8)"
@@ -114,25 +113,37 @@ def generate_mop(pdf_content: str, shelf_type: str, llm) -> str:
 
 def main():
 
+# ---- Step 1: Load API key ----
+
     API_KEY = get_api_key()
 
+# ---- Step 2: Initialize LLM (with health check) ----
     try:
-        llm = ChatOpenAI(model="gpt-5-mini", temperature=0, openai_api_key=API_KEY)
+        llm = ChatOpenAI(
+            model="gpt-5-mini", 
+            temperature=0, 
+            openai_api_key=API_KEY
+            )
+        
+        #Sanity check
         llm.invoke("health check")
     except Exception as e:
         print(f"Failed to initialize LLM: {e}")
         exit(1)
 
-    #model="gpt-5-mini"
-
-
+# ---- Step 3: Get user input ----
     shelf_type = get_shelf_type()
 
+# ---- Step 4: Read PDF Content ----
     pdf_content = read_pdf_content()
-    
+
+# ---- Step 5: Generate MOP ----    
     mop_output = generate_mop(pdf_content, shelf_type, llm)
+
+# ---- Step 6: Display Output ----
     print("\n\n Generated MOP:\n")
     print(mop_output)
+
 
 
 if __name__ == "__main__":
